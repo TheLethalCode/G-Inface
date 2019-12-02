@@ -17,7 +17,7 @@ def authorize():
     # If token doesn't exist, or isn't valid, request new token
     if not creds or creds.invalid:
 
-        flow = client.flow_from_clientsecrets('client_secret.json', SCOPES)
+        flow = client.flow_from_clientsecrets('client_secret.json', SCOPES, prompt='consent')
         
         # Open the browser requesting the authorisation from the user with the 
         # requested scopes. It waits for the access grant, and redirects it to a 

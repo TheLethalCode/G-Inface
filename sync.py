@@ -1,4 +1,6 @@
-import os
+import os, sys
+from authenticate import authorize
+from googleapiclient.http import MediaFileUpload
 
 def uploadFile(filePath, service, par_id):
     """
@@ -11,15 +13,26 @@ def uploadFile(filePath, service, par_id):
         'parents' : [par_id]
     }
 
-    status = service.files().create(body = metadata, media_body = filePath, fields = 'id')
+    content = MediaFileUpload(filePath, resumable= True, chunksize=524288)
 
-    # Check the status of uploading
-    if status.get('id',None) is None:
-        print("Error Uploading {} ......".format(os.path.basename(filePath)))
-        exit(0)
+    request = service.files().create(
+                body = metadata, 
+                media_body = content 
+            )
 
-    else:
-        print("Success Uploading {} ......".format(os.path.basename(filePath)))
+    print("{} - Preaparing file\r".format(os.path.basename(filePath)),end = "")
+
+    #Upload in chunks
+    response = None
+    while response is None:
+        
+        # Print the status of the upload
+        status, response = request.next_chunk()
+        if status:
+            print("{} - Uploading ( {:.2%} )\r".format(os.path.basename(filePath),
+                                                         status.progress()), end = "")
+
+    print("{} - Upload Complete       ".format(os.path.basename(filePath)))
 
 
 def removeFile(service, id):
@@ -139,3 +152,10 @@ def createSync(service):
 
     # And return its id
     return fileData['id']
+
+
+if __name__ == "__main__":
+
+    service = authorize()
+    syncRoot = createSync(service)
+    uploadFile(sys.argv[1], service, syncRoot)
