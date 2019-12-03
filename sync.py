@@ -47,17 +47,20 @@ def removeFile(service, Fid, name):
     service.files().delete(fileId=Fid).execute()
 
 
-def removeExtra(localPath, service, driveFolderID):
+def removeExtra(localPath, service, driveFolderID, init = None):
     
     """
     localPath points to a sync file or folder supposed to be under the drive folder pointed by driveFolderID.
     The function removes extra contents in the drive folder not in the local one.
     """
 
-    # The contents of the local directory
-    contents = [content for content in os.listdir(localPath)]
+    contents = init
 
-    print("Removing extra files from {}".format(localPath))
+    # The contents of the local directory
+    if contents is None:
+        contents = [content for content in os.listdir(localPath)]
+        print("Removing extra files from {}".format(localPath))
+
 
     page_token = None
     while True:
@@ -74,14 +77,14 @@ def removeExtra(localPath, service, driveFolderID):
 
             # If the file is not in the directory
             if file['name'] not in contents:
-
+                
                 # Remove the file from the drive
                 removeFile(service, file['id'], file['name'])
         
             else:
 
                 path = os.path.join(localPath, file['name'])
-
+                
                 # Remove the extra contents in that directory
                 if os.path.isdir(path):
                     removeExtra(path, service, file['id'])
@@ -124,18 +127,19 @@ def syncFolder(syncPath, service, par_id):
                         fileFolder = os.path.join(syncPath,fileFolder)
                         syncFolder(fileFolder,service, file['id'])
 
-                    print("{} - Complete")
+                    print("{} - Complete".format(os.path.basename(syncPath)))
 
                 # If file, check whether the contents are the same
                 else:
 
                     # If they are not the same, remove the old and upload the new
-                    if not ( abs( os.stat(syncPath).st_size - file['size'] ) < 10 ) : 
+                    if not ( abs( os.stat(syncPath).st_size - int(file['size']) ) < 10 ) :
+                        print("{} - Updating\r".format(os.path.basename(syncPath)),end="") 
                         removeFile(service, file['id'], None)
                         uploadFile(syncPath, service, par_id)
 
-                    else:
-                        print("{} - Already Present".format(os.path.basename(syncPath)))
+                    # else:
+                    #     print("{} - Already Present".format(os.path.basename(syncPath)))
 
                 return
 
@@ -223,5 +227,5 @@ if __name__ == "__main__":
 
     service = authorize()
     syncRoot = createSync(service)
-    # syncFolder(sys.argv[1], service, syncRoot)
-    removeExtra(os.path.expanduser("~"), service, syncRoot)
+    syncFolder("/home/thelethalcode/Downloads", service, syncRoot)
+    # removeExtra(os.path.expanduser("~"), service, syncRoot)

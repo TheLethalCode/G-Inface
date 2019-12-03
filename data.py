@@ -51,19 +51,21 @@ class data(object):
     # Update the folders to sync 
     def updateFolders(self, folders, remove):
 
-        with open('.data.json','w+') as jsDa:
-            
+        with open('.data.json','r') as jsDa:
             vals = json.load(jsDa)
+
+        with open('.data.json','w') as jsDa:
 
             # Update the folders as required
             if remove:
-                vals['folder'] = [item for item in vals['folder'] if item not in folders ]
+                vals['folders'] = [item for item in vals['folders'] if item not in folders ]
 
             else:
-                vals['folder'].extend(folders)
-
+                vals['folders'].extend([item for item in folders if item not in vals['folders']])
+                # print(vals['folders'])
+                # exit(0)
             # Dump the update list to the json file
             json.dump(vals, jsDa)
 
-            self.foldersUpload = vals['folder']
+        self.foldersUpload = vals['folders']
 
