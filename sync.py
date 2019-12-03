@@ -35,13 +35,61 @@ def uploadFile(filePath, service, par_id):
     print("{} - Upload Complete       ".format(os.path.basename(filePath)))
 
 
-def removeFile(service, id):
+def removeFile(service, Fid, name):
     """
     Remove the file with the given id
     """
 
-    # Delete the file given by its is
-    service.files().delete(id)
+    if name:
+        print("{} Deleted".format(name))
+
+    # Delete the file given by its is id
+    service.files().delete(fileId=Fid).execute()
+
+
+def removeExtra(localPath, service, driveFolderID):
+    
+    """
+    localPath points to a sync file or folder supposed to be under the drive folder pointed by driveFolderID.
+    The function removes extra contents in the drive folder not in the local one.
+    """
+
+    # The contents of the local directory
+    contents = [content for content in os.listdir(localPath)]
+
+    print("Removing extra files from {}".format(localPath))
+
+    page_token = None
+    while True:
+    
+        # Look for all contents in the parent directory
+        results = service.files().list(
+                q = "'{}' in parents".format(driveFolderID),
+                fields = "nextPageToken, files(id, name)",
+                pageToken = page_token
+            ).execute()
+
+        # Look through the contents of the folder of the drive
+        for file in results.get('files',[]):
+
+            # If the file is not in the directory
+            if file['name'] not in contents:
+
+                # Remove the file from the drive
+                removeFile(service, file['id'], file['name'])
+        
+            else:
+
+                path = os.path.join(localPath, file['name'])
+
+                # Remove the extra contents in that directory
+                if os.path.isdir(path):
+                    removeExtra(path, service, file['id'])
+        
+                        
+        page_token = results.get('nextPageToken',None)
+        if page_token is None:
+            break
 
 
 def syncFolder(syncPath, service, par_id):
@@ -69,16 +117,25 @@ def syncFolder(syncPath, service, par_id):
                 # After finding the item, check whether it is a directory or file
                 # If directory, recurse and sync all of its contents
                 if os.path.isdir(syncPath):
+
+                    print("{} - Recursing".format(os.path.basename(syncPath)))
+
                     for fileFolder in os.listdir(syncPath):
+                        fileFolder = os.path.join(syncPath,fileFolder)
                         syncFolder(fileFolder,service, file['id'])
+
+                    print("{} - Complete")
 
                 # If file, check whether the contents are the same
                 else:
 
                     # If they are not the same, remove the old and upload the new
-                    if not ( abs( os.stat(syncPath).st_size - file['size'] ) < 100 ) : 
-                        removeFile(service, file['id'])
+                    if not ( abs( os.stat(syncPath).st_size - file['size'] ) < 10 ) : 
+                        removeFile(service, file['id'], None)
                         uploadFile(syncPath, service, par_id)
+
+                    else:
+                        print("{} - Already Present".format(os.path.basename(syncPath)))
 
                 return
 
@@ -89,9 +146,11 @@ def syncFolder(syncPath, service, par_id):
     # If the directory is not present, create it.
     if os.path.isdir(syncPath):
 
+        print("{} - Directory Created".format(os.path.basename(syncPath)))
+
         # Creating the directory under the parent directory
         metadata = {
-            'name' : os.path.basename(syncFolder),
+            'name' : os.path.basename(syncPath),
             'mimeType' : 'application/vnd.google-apps.folder',
             'parents'  : [par_id]
         }
@@ -104,7 +163,10 @@ def syncFolder(syncPath, service, par_id):
 
         # Syncing the subfolders
         for fileFolder in os.listdir(syncPath):
+            fileFolder = os.path.join(syncPath,fileFolder)
             syncFolder(fileFolder,service, fileData['id'])
+        
+        print("{} - All contents uploaded".format(os.path.basename(syncPath)))
 
     # If it is a file, upload it
     else:
@@ -140,6 +202,9 @@ def createSync(service):
             break
 
     # Else create the folder
+
+    print("Creating Root Folder for syncing")
+
     metadata = {
         'name' : 'G_{}'.format(hostname),
         'mimeType' : 'application/vnd.google-apps.folder'
@@ -158,4 +223,5 @@ if __name__ == "__main__":
 
     service = authorize()
     syncRoot = createSync(service)
-    uploadFile(sys.argv[1], service, syncRoot)
+    # syncFolder(sys.argv[1], service, syncRoot)
+    removeExtra(os.path.expanduser("~"), service, syncRoot)
